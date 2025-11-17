@@ -1,0 +1,275 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MannBuddy Prototype</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ✨ Animated Glitter Gradient Background */
+    body {
+      font-family: Arial, sans-serif;
+      margin:0; padding:20px;
+      background: linear-gradient(120deg,#1a1f3a,#0f1729,#2a3a52,#1f2938);
+      background-size: 400% 400%;
+      animation: glitterBg 18s ease infinite;
+    }
+
+    @keyframes glitterBg {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ✨ Glass-card sections */
+    .section {
+      background: rgba(42,58,82,0.6);
+      padding:20px;
+      margin:15px 0;
+      border-radius:12px;
+      backdrop-filter: blur(6px);
+      box-shadow:0 3px 10px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      background: linear-gradient(90deg,#4a90e2,#357abd,#64b5f6,#5a8ec9);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      color: transparent;
+      animation: shineText 6s linear infinite;
+    }
+
+    h2 {
+      color: #64b5f6;
+      font-weight: bold;
+    }
+
+    @keyframes shineText {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+
+    /* Chat messages */
+    .user { color:#64b5f6; font-weight:bold; }
+    .bot { color:#81c784; font-weight:bold; }
+
+    /* ⭐ FIXED SIZE CHAT BOX */
+    #chat-box {
+      height:220px;       /* Reduced height */
+      overflow-y:auto;
+      border:1px solid rgba(74,144,226,0.3);
+      background: rgba(26,31,58,0.8);
+      border-radius:10px;
+      padding:15px;
+      margin-bottom:10px;
+    }
+
+    /* Inputs */
+    input, select, button, textarea {
+      margin:5px 0; 
+      padding:8px;             /* reduced */
+      width:100%;
+      border-radius:8px;
+      border:1px solid rgba(74,144,226,0.4);
+      background: rgba(31,41,56,0.7);
+      color: #e0e0e0;
+      font-size:14px;          /* reduced */
+    }
+
+    /* ⭐ FIXED BUTTON SIZE */
+    button {
+      height:34px;             /* smaller buttons */
+      font-size:14px;
+      background: linear-gradient(90deg,#4a90e2,#357abd,#2c5aa0,#5a8ec9);
+      background-size: 300% 300%;
+      animation: glitterBtn 4s ease infinite;
+      color:#fff; 
+      font-weight:bold;
+      border:none;
+      cursor:pointer;
+    }
+
+    @keyframes glitterBtn {
+      0% { background-position:0% 50%; }
+      50% { background-position:100% 50%; }
+      100% { background-position:0% 50%; }
+    }
+
+    /* Crisis button */
+    #crisis-btn {
+      height:34px;         /* same size */
+      background: linear-gradient(90deg,#ff4b80,#ff6a6a,#ff9a9a);
+      animation: pulse 2s infinite;
+      font-size:14px;
+    }
+
+    @keyframes pulse {
+      0%,100% { transform:scale(1); box-shadow:0 0 6px #ff4b80; }
+      50% { transform:scale(1.03); box-shadow:0 0 12px #ff4b80; }
+    }
+
+    table { width:100%; border-collapse: collapse; margin-top:10px; }
+    th, td { border:1px solid rgba(74,144,226,0.3); padding:8px; color: #e0e0e0; }
+  </style>
+</head>
+
+<body>
+  <h1>MannBuddy Prototype 💙</h1>
+
+  <!-- Chatbot -->
+  <div class="section">
+    <h2>🤖 AI Chatbot</h2>
+    <div id="chat-box"></div>
+    <input type="text" id="chat-input" placeholder="Type your message...">
+    <button id="send-btn">Send</button>
+    <button id="crisis-btn">Crisis Help</button>
+  </div>
+
+  <!-- Mood Journal -->
+  <div class="section">
+    <h2>📓 Mood Journal</h2>
+    <form id="journal-form">
+      <label>Select Mood:</label>
+      <select id="mood">
+        <option>Happy</option>
+        <option>Sad</option>
+        <option>Anxious</option>
+        <option>Calm</option>
+      </select>
+      <label>Note:</label>
+      <textarea id="note" placeholder="Write your thoughts..."></textarea>
+      <button type="submit">Add Entry</button>
+    </form>
+
+    <table>
+      <thead>
+        <tr><th>Mood</th><th>Note</th><th>When</th></tr>
+      </thead>
+      <tbody id="journal"></tbody>
+    </table>
+  </div>
+
+  <div style="max-width:250px; margin:auto;">
+    <canvas id="moodChart"></canvas>
+  </div>
+
+
+<script>
+const CHAT_API = "http://localhost:8000/api/chat";
+const ADD_JOURNAL_API = "http://localhost:8000/api/journal/add";
+const GET_JOURNAL_API = "http://localhost:8000/api/journal";
+const MOOD_STATS_API = "http://localhost:8000/api/mood-stats";
+
+const chatBox = document.getElementById("chat-box");
+const input = document.getElementById("chat-input");
+const sendBtn = document.getElementById("send-btn");
+const crisisBtn = document.getElementById("crisis-btn");
+
+sendBtn.onclick = async () => {
+  const msg = input.value.trim();
+  if (!msg) return;
+  appendMessage("You", msg, "user");
+
+  const payload = { message: msg, history: [] };
+
+  try {
+    const res = await fetch(CHAT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    appendMessage("MannBuddy", data.reply || "Sorry, I didn't get that.", "bot");
+  } catch (err) {
+    appendMessage("MannBuddy", "Network error. Try again.", "bot");
+  }
+  input.value = "";
+};
+
+function appendMessage(who, text, cls) {
+  chatBox.innerHTML += `<p class='${cls}'><b>${who}:</b> ${escapeHtml(text)}</p>`;
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function escapeHtml(unsafe) {
+  return unsafe.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+
+crisisBtn.onclick = () => {
+  appendMessage("MannBuddy", "If you're in immediate danger, call emergency services. Helpline: <Your Local Number>", "bot");
+};
+
+const form = document.getElementById("journal-form");
+const journalTable = document.getElementById("journal");
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const mood = document.getElementById("mood").value;
+  const note = document.getElementById("note").value;
+
+  await fetch(ADD_JOURNAL_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mood, note })
+  });
+
+  document.getElementById("note").value = "";
+  await loadJournal();
+  await loadMoodStats();
+});
+
+async function loadJournal() {
+  const res = await fetch(GET_JOURNAL_API);
+  const data = await res.json();
+  journalTable.innerHTML = (data.entries || [])
+    .map(r => `<tr><td>${escapeHtml(r.mood)}</td><td>${escapeHtml(r.note||"")}</td><td>${r.created_at}</td></tr>`)
+    .join("");
+}
+
+const ctx = document.getElementById("moodChart").getContext("2d");
+
+let gradientHappy = ctx.createLinearGradient(0,0,200,200);
+gradientHappy.addColorStop(0,"#81c784");
+gradientHappy.addColorStop(1,"#66bb6a");
+
+let gradientSad = ctx.createLinearGradient(0,0,200,200);
+gradientSad.addColorStop(0,"#4a90e2");
+gradientSad.addColorStop(1,"#357abd");
+
+let gradientAnx = ctx.createLinearGradient(0,0,200,200);
+gradientAnx.addColorStop(0,"#ffa726");
+gradientAnx.addColorStop(1,"#fb8c00");
+
+let gradientCalm = ctx.createLinearGradient(0,0,200,200);
+gradientCalm.addColorStop(0,"#64b5f6");
+gradientCalm.addColorStop(1,"#42a5f5");
+
+const moodChart = new Chart(ctx, {
+  type: 'pie',
+  data: {
+    labels: ["Happy","Sad","Anxious","Calm"],
+    datasets: [{
+      data: [0,0,0,0],
+      backgroundColor: [gradientHappy, gradientSad, gradientAnx, gradientCalm]
+    }]
+  }
+});
+
+async function loadMoodStats() {
+  const res = await fetch(MOOD_STATS_API);
+  const stats = await res.json();
+  moodChart.data.datasets[0].data = [
+    stats.Happy || 0,
+    stats.Sad || 0,
+    stats.Anxious || 0,
+    stats.Calm || 0
+  ];
+  moodChart.update();
+}
+
+loadJournal();
+loadMoodStats();
+</script>
+</body>
+</html>
